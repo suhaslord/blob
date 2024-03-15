@@ -3,23 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Suhas Browser</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Custom Browser</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+        }
+        #search-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        #search-input {
+            width: 400px;
+            padding: 10px;
+            font-size: 18px;
+        }
+        #search-btn {
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
-    <div id="browser">
-        <div class="toolbar">
-            <button id="backButton">Back</button>
-            <button id="forwardButton">Forward</button>
-            <input type="text" id="urlInput" placeholder="Enter URL">
-            <button id="goButton">Go</button>
-            <button id="bookmarkButton">Bookmark</button>
-            <input type="text" id="searchInput" placeholder="Search">
-            <button id="searchButton">Search</button>
-        </div>
-        <iframe id="contentFrame" src="https://www.google.com"></iframe>
+    <div id="search-container">
+        <input type="text" id="search-input" placeholder="Enter your search term">
+        <button id="search-btn">Search</button>
     </div>
-    <script src="script.js"></script>
+
+    <script>
+        document.getElementById('search-btn').addEventListener('click', function() {
+            var searchTerm = document.getElementById('search-input').value;
+            if (searchTerm.trim() !== '') {
+                // Replace spaces with + for the URL
+                searchTerm = searchTerm.replace(/\s+/g, '+');
+                // Redirect to Google search
+                window.location.href = 'https://www.google.com/search?q=' + searchTerm;
+            }
+        });
+    </script>
 </body>
 </html>
-
