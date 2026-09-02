@@ -1,0 +1,247 @@
+--- a/src/eval/src/eval/schema.py
++++ b/src/eval/src/eval/schema.py
+@@ -6,8 +6,19 @@
+ 
+ 
+ @dataclass
++class SpeedLimitScorerConfig:
++    # Explicit opt-in until a canonical posted speed-limit source is exposed by
++    # the vector-map/scenario schema.
++    enabled: bool = False
++    speed_limit_mps: float | None = None
++    # Small tolerance for discretization/controller noise.
++    tolerance_mps: float = 0.0
++
++
++@dataclass
+ class ScorersConfig:
+     min_ade: MinADEScorerConfig = MISSING
+     plan_deviation: PlanDeviationScorerConfig = MISSING
+     image: ImageScorerConfig = MISSING
+     open_loop_collision: OpenLoopCollisionScorerConfig = MISSING
++    speed_limit: SpeedLimitScorerConfig | None = None
+--- a/src/eval/src/eval/scorers/__init__.py
++++ b/src/eval/src/eval/scorers/__init__.py
+@@ -9,6 +9,7 @@
+ from eval.scorers.open_loop_collision import OpenLoopCollisionScorer
+ from eval.scorers.plan_deviation import PlanDeviationScorer
+ from eval.scorers.safety import SafetyScorer
++from eval.scorers.speed_limit import SpeedLimitScorer
+ 
+ SCORERS = [
+     CollisionScorer,
+@@ -20,4 +21,5 @@
+     PlanDeviationScorer,
+     ImageScorer,
+     SafetyScorer,
++    SpeedLimitScorer,
+ ]
+--- a/src/wizard/configs/base_config.yaml
++++ b/src/wizard/configs/base_config.yaml
+@@ -11,6 +11,12 @@
+       camera_logical_id: camera_front_wide_120fov
+     open_loop_collision:
+       horizon_s: 3.0
++    # Explicit per-run limit for the first speed-compliance implementation.
++    # Keep disabled until the run config intentionally supplies a road limit.
++    speed_limit:
++      enabled: false
++      speed_limit_mps: null
++      tolerance_mps: 0.0
+ 
+   aggregation_modifiers:
+     max_dist_to_gt_trajectory: 4.0
+--- /dev/null
++++ b/src/eval/src/eval/scorers/speed_limit.py
+@@ -0,0 +1,98 @@
++# SPDX-License-Identifier: Apache-2.0
++# Copyright (c) 2026 NVIDIA Corporation
++
++import numpy as np
++
++from eval.data import AggregationType, MetricReturn, SimulationResult
++from eval.schema import EvalConfig, SpeedLimitScorerConfig
++from eval.scorers.base import Scorer
++
++
++def _ego_speed_mps(
++    simulation_result: SimulationResult,
++) -> tuple[list[float], list[bool]]:
++    """Estimate ego planar speed at evaluation timestamps."""
++    timestamps_us = np.asarray(simulation_result.timestamps_us, dtype=np.uint64)
++    if len(timestamps_us) == 0:
++        return [], []
++
++    ego = simulation_result.actor_trajectories["EGO"].interpolate(timestamps_us)
++    positions_xy = np.asarray(ego.positions[:, :2], dtype=np.float64)
++
++    if len(timestamps_us) == 1:
++        return [0.0], [False]
++
++    dt_s = np.diff(timestamps_us.astype(np.float64)) / 1e6
++    distance_m = np.linalg.norm(np.diff(positions_xy, axis=0), axis=1)
++    segment_speed = np.zeros_like(distance_m, dtype=np.float64)
++    segment_valid = dt_s > 0
++    np.divide(distance_m, dt_s, out=segment_speed, where=segment_valid)
++
++    speeds = np.concatenate(([segment_speed[0]], segment_speed))
++    valid = np.concatenate(([segment_valid[0]], segment_valid))
++    return speeds.tolist(), valid.tolist()
++
++
++class SpeedLimitScorer(Scorer):
++    """Configurable speed-limit compliance metrics.
++
++    Automatic posted-limit inference is intentionally deferred until AlpaSim
++    exposes a canonical source. The current trajdata ``RoadLane`` schema has no
++    speed-limit field, so this scorer accepts an explicit per-run limit instead
++    of guessing from unrelated driver/plugin constants.
++    """
++
++    def __init__(self, cfg: EvalConfig) -> None:
++        super().__init__(cfg)
++        scorer_cfg: SpeedLimitScorerConfig | None = getattr(
++            cfg.scorers, "speed_limit", None
++        )
++        self.enabled = scorer_cfg is not None and scorer_cfg.enabled
++        self.speed_limit_mps = (
++            None if scorer_cfg is None else scorer_cfg.speed_limit_mps
++        )
++        self.tolerance_mps = 0.0 if scorer_cfg is None else scorer_cfg.tolerance_mps
++
++        if self.enabled:
++            if self.speed_limit_mps is None or self.speed_limit_mps <= 0:
++                raise ValueError(
++                    "speed_limit.speed_limit_mps must be > 0 when the scorer is enabled"
++                )
++            if self.tolerance_mps < 0:
++                raise ValueError("speed_limit.tolerance_mps must be >= 0")
++
++    def calculate(self, simulation_result: SimulationResult) -> list[MetricReturn]:
++        if not self.enabled:
++            return []
++
++        speeds, valid = _ego_speed_mps(simulation_result)
++        assert self.speed_limit_mps is not None
++        limit = float(self.speed_limit_mps)
++        threshold = limit + float(self.tolerance_mps)
++        speed_over = [max(0.0, speed - limit) for speed in speeds]
++        violation = [speed > threshold for speed in speeds]
++        timestamps_us = list(simulation_result.timestamps_us)
++
++        return [
++            MetricReturn(
++                name="ego_speed_mps",
++                values=speeds,
++                valid=valid,
++                timestamps_us=timestamps_us,
++                time_aggregation=AggregationType.MAX,
++            ),
++            MetricReturn(
++                name="speed_over_limit_mps",
++                values=speed_over,
++                valid=valid,
++                timestamps_us=timestamps_us,
++                time_aggregation=AggregationType.MAX,
++            ),
++            MetricReturn(
++                name="speed_limit_violation",
++                values=violation,
++                valid=valid,
++                timestamps_us=timestamps_us,
++                time_aggregation=AggregationType.MEAN,
++            ),
++        ]
+--- /dev/null
++++ b/src/eval/tests/test_speed_limit.py
+@@ -0,0 +1,90 @@
++# SPDX-License-Identifier: Apache-2.0
++# Copyright (c) 2026 NVIDIA Corporation
++
++from types import SimpleNamespace
++
++import numpy as np
++import pytest
++
++from eval.data import RenderableTrajectory
++from eval.scorers.speed_limit import SpeedLimitScorer
++
++_IDENTITY_QUAT = [0.0, 0.0, 0.0, 1.0]
++
++
++def _trajectory(timestamps_us: list[int], x: list[float]) -> RenderableTrajectory:
++    positions = np.array([[value, 0.0, 0.0] for value in x], dtype=np.float32)
++    quaternions = np.array([_IDENTITY_QUAT] * len(x), dtype=np.float32)
++    return RenderableTrajectory(
++        timestamps_us=np.array(timestamps_us, dtype=np.uint64),
++        positions=positions,
++        quaternions=quaternions,
++    )
++
++
++def _scorer(limit_mps: float = 10.0, tolerance_mps: float = 0.0) -> SpeedLimitScorer:
++    cfg = SimpleNamespace(
++        scorers=SimpleNamespace(
++            speed_limit=SimpleNamespace(
++                enabled=True,
++                speed_limit_mps=limit_mps,
++                tolerance_mps=tolerance_mps,
++            )
++        )
++    )
++    return SpeedLimitScorer(cfg)
++
++
++def _sim_result(timestamps_us: list[int], x: list[float]) -> SimpleNamespace:
++    return SimpleNamespace(
++        timestamps_us=timestamps_us,
++        actor_trajectories={"EGO": _trajectory(timestamps_us, x)},
++    )
++
++
++def test_reports_speed_excess_and_violation_fraction() -> None:
++    sim_result = _sim_result(
++        [0, 1_000_000, 2_000_000, 3_000_000],
++        [0.0, 8.0, 20.0, 35.0],
++    )
++
++    speed, over, violation = _scorer(limit_mps=10.0).calculate(sim_result)
++
++    assert speed.name == "ego_speed_mps"
++    assert speed.values == pytest.approx([8.0, 8.0, 12.0, 15.0])
++    assert over.values == pytest.approx([0.0, 0.0, 2.0, 5.0])
++    assert violation.values == [False, False, True, True]
++    assert violation.aggregate() == pytest.approx(0.5)
++
++
++def test_tolerance_is_only_applied_to_violation_flag() -> None:
++    sim_result = _sim_result([0, 1_000_000], [0.0, 10.4])
++
++    _, over, violation = _scorer(limit_mps=10.0, tolerance_mps=0.5).calculate(
++        sim_result
++    )
++
++    assert over.values == pytest.approx([0.4, 0.4])
++    assert violation.values == [False, False]
++
++
++def test_duplicate_timestamp_is_invalid_not_divide_by_zero() -> None:
++    sim_result = _sim_result([0, 0, 1_000_000], [0.0, 1.0, 6.0])
++
++    speed, _, _ = _scorer(limit_mps=4.0).calculate(sim_result)
++
++    assert speed.values == pytest.approx([0.0, 0.0, 5.0])
++    assert speed.valid == [False, False, True]
++
++
++def test_disabled_scorer_emits_no_metrics() -> None:
++    cfg = SimpleNamespace(
++        scorers=SimpleNamespace(
++            speed_limit=SimpleNamespace(
++                enabled=False,
++                speed_limit_mps=None,
++                tolerance_mps=0.0,
++            )
++        )
++    )
++    assert SpeedLimitScorer(cfg).calculate(SimpleNamespace()) == []
