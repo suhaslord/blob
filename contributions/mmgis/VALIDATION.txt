@@ -1,0 +1,5 @@
+PASS: regenerated from the exact current /upsert documentation and OpenAPI snippets.
+PASS: git apply --check succeeds on those current snippets.
+PASS: patched OpenAPI JSON parses and has required=[mission] plus anyOf(config, version).
+Base checked: MMGIS development 793dc05b55f7654e3a345eaff42120aa3bae3e25
+Issue: #963 remains open.
