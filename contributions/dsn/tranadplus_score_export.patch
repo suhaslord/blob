@@ -1,0 +1,158 @@
+diff --git a/src/helpers.py b/src/helpers.py
+--- a/src/helpers.py
++++ b/src/helpers.py
+@@
+ def gen_TranAD_predictions(model, loss_fn, dataloader, alpha=0.5, beta=0.5, device='cpu') -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+@@
+     return loss, pred_y, elem, true_y, anoms
++
++def prepare_TranAD_score_export(
++    loss_train: np.ndarray,
++    loss_test: np.ndarray,
++    anoms_test: np.ndarray,
++) -> dict:
++    """Build the arrays needed for held-out threshold calibration.
++
++    Keeps the existing TranAD anomaly-score definition unchanged:
++    per-parameter MSE is retained, while the global score is the mean across
++    parameters, matching ``evaluate_TranAD``.
++    """
++    loss_train = np.asarray(loss_train)
++    loss_test = np.asarray(loss_test)
++    anoms_test = np.asarray(anoms_test)
++
++    if loss_train.ndim != 2 or loss_test.ndim != 2 or anoms_test.ndim != 2:
++        raise ValueError("loss_train, loss_test, and anoms_test must all be 2D")
++    if loss_test.shape != anoms_test.shape:
++        raise ValueError(
++            f"test loss/label shapes must match, got {loss_test.shape} and {anoms_test.shape}"
++        )
++    if loss_train.shape[1] != loss_test.shape[1]:
++        raise ValueError("train/test feature counts must match")
++
++    return {
++        "train_scores_global": np.mean(loss_train, axis=1).astype(np.float32),
++        "test_scores_global": np.mean(loss_test, axis=1).astype(np.float32),
++        "test_scores_per_parameter": loss_test.astype(np.float32, copy=False),
++        "test_labels_global": (np.sum(anoms_test, axis=1) >= 1).astype(np.uint8),
++        "test_labels_per_parameter": (anoms_test >= 1).astype(np.uint8),
++    }
++
++def export_TranAD_scores(
++    model,
++    train_dataloader,
++    test_dataloader,
++    save_path,
++    alpha=0.5,
++    beta=0.5,
++    pot_q=1e-5,
++    device='cpu',
++    identifier='',
++):
++    """Run one frozen-alpha inference pass and save calibration inputs.
++
++    The export is deliberately separate from metric selection so the normal
++    evaluation result dictionaries stay small during alpha search.
++    """
++    loss_fn = nn.MSELoss(reduction='none')
++    loss_test, _, _, _, anoms_test = gen_TranAD_predictions(
++        model, loss_fn, test_dataloader, alpha=alpha, beta=beta, device=device
++    )
++    loss_train, _, _, _, _ = gen_TranAD_predictions(
++        model, loss_fn, train_dataloader, alpha=alpha, beta=beta, device=device
++    )
++    payload = prepare_TranAD_score_export(loss_train, loss_test, anoms_test)
++    np.savez_compressed(
++        save_path,
++        **payload,
++        alpha=np.float64(alpha),
++        beta=np.float64(beta),
++        pot_q=np.float64(pot_q),
++        identifier=np.asarray(identifier),
++    )
++    return {
++        "save_path": str(save_path),
++        "n_train": int(loss_train.shape[0]),
++        "n_test": int(loss_test.shape[0]),
++        "n_features": int(loss_test.shape[1]),
++    }
+ 
+ def evaluate_TranAD(model, train_dataloader, test_dataloader, alpha=0.5, beta=0.5, pot_q=1e-5, device='cpu') -> dict:
+diff --git a/scripts/evaluation.py b/scripts/evaluation.py
+--- a/scripts/evaluation.py
++++ b/scripts/evaluation.py
+@@
+     pot_best_ret.update({"alpha": pot_best_alpha})
+     pot_best_ret.update({"best": 1-pot_best_alpha})
+     print(f"Best pot output had alpha={pot_best_alpha}") 
+     pprint(pot_best_ret)
++
++    # Optional raw-score export for leakage-resistant threshold calibration.
++    # This performs one additional inference pass at the already-selected POT
++    # alpha so large per-parameter arrays are not retained for every alpha
++    # considered during alpha_search.
++    if args.export_scores:
++        if model_str != 'TranAD':
++            raise ValueError("--export_scores is currently implemented for TranAD only")
++        score_path = os.path.join(
++            experiment_dir,
++            'Pickles',
++            hp_dict['identifier'] + '_pot_scores.npz',
++        )
++        export_meta = helpers.export_TranAD_scores(
++            model,
++            train_dataloader,
++            test_dataloader,
++            score_path,
++            alpha=pot_best_alpha,
++            beta=1-pot_best_alpha,
++            pot_q=hp_dict['pot_q'],
++            device=device,
++            identifier=hp_dict['identifier'],
++        )
++        print("Exported raw threshold-calibration inputs:")
++        pprint(export_meta)
+ 
+     # Save output results as pickles
+@@
+     parser.add_argument('--alpha_search', type=bool, default=False)
++    parser.add_argument(
++        '--export_scores',
++        action='store_true',
++        help='Export TranAD train/test anomaly scores and labels to compressed NPZ',
++    )
+     args = parser.parse_args()
+diff --git a/test/test_helpers.py b/test/test_helpers.py
+--- a/test/test_helpers.py
++++ b/test/test_helpers.py
+@@
+ class TestHelpers(unittest.TestCase):
+@@
+     def test_downsample(self):
+@@
+         self.assertTrue(np.all(np.equal(arr_expected, arr_out)))
++
++    def test_prepare_TranAD_score_export(self):
++        train = np.array(
++            [[1.0, 3.0], [2.0, 4.0], [0.0, 2.0]], dtype=np.float32
++        )
++        test = np.array(
++            [[0.5, 1.5], [5.0, 7.0], [2.0, 2.0]], dtype=np.float32
++        )
++        labels = np.array([[0, 0], [0, 1], [1, 0]], dtype=np.uint8)
++
++        payload = helpers.prepare_TranAD_score_export(train, test, labels)
++        nptesting.assert_allclose(
++            payload["train_scores_global"], [2.0, 3.0, 1.0]
++        )
++        nptesting.assert_allclose(
++            payload["test_scores_global"], [1.0, 6.0, 2.0]
++        )
++        nptesting.assert_array_equal(payload["test_labels_global"], [0, 1, 1])
++        nptesting.assert_array_equal(
++            payload["test_labels_per_parameter"], labels
++        )
++        self.assertEqual(payload["test_scores_per_parameter"].shape, (3, 2))
++
++        with self.assertRaises(ValueError):
++            helpers.prepare_TranAD_score_export(train, test[:, :1], labels)
