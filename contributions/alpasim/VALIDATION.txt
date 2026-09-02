@@ -1,0 +1,7 @@
+PASS: regenerated as a valid unified patch against current AlpaSim main snippets.
+PASS: git apply --check succeeds on current schema/scorer-registration/base-config contexts.
+PASS: scorer and repo-style test file compile.
+Existing standalone arithmetic validation: 4/4 PASS.
+Current map finding: NVlabs/trajdata RoadLane has no posted speed-limit field.
+Base checked: AlpaSim main affc2eab209fa43bdfa2f26c0f8d437922d78a68
+Upstream GitHub write attempt: 403 Resource not accessible by integration.
