@@ -1,0 +1,168 @@
+{
+  "dataset_cases": 14,
+  "speakers": 1,
+  "excerpts": 2,
+  "calibration_clip": "power",
+  "held_out_clip": "beliefs",
+  "unmodified_or_global_gain_controls": 4,
+  "control_false_positive_cases": 0,
+  "moderate_and_severe_volume_mean_iou": 0.975,
+  "pause_mean_iou": 0.815,
+  "rushed_detected_cases": 2,
+  "near_perfect_below_threshold_cases": 2,
+  "limitations": [
+    "Two excerpts of one speaker; this is not cross-speaker validation.",
+    "Exact labels describe injected changes. Baseline word boundaries are machine-estimated, not manually verified.",
+    "Near-perfect 5 dB edits are deliberately below the 7 dB energy threshold and are not detected.",
+    "Pause localization can include adjacent natural silence.",
+    "Scores express reference similarity, not subjective or competitive performance quality."
+  ],
+  "cases": [
+    {
+      "case": "power-unchanged",
+      "split": "calibration",
+      "score": 100.0,
+      "gold_region_count": 0,
+      "detected_region_count": 0,
+      "region_iou": [],
+      "transcript_coverage": 1.0
+    },
+    {
+      "case": "power-global-gain-control",
+      "split": "calibration",
+      "score": 100.0,
+      "gold_region_count": 0,
+      "detected_region_count": 0,
+      "region_iou": [],
+      "transcript_coverage": 1.0
+    },
+    {
+      "case": "power-near-perfect",
+      "split": "calibration",
+      "score": 100.0,
+      "gold_region_count": 1,
+      "detected_region_count": 0,
+      "region_iou": [
+        0
+      ],
+      "transcript_coverage": 1.0
+    },
+    {
+      "case": "power-moderate-volume",
+      "split": "calibration",
+      "score": 76.0,
+      "gold_region_count": 1,
+      "detected_region_count": 1,
+      "region_iou": [
+        0.9
+      ],
+      "transcript_coverage": 1.0
+    },
+    {
+      "case": "power-severe-volume",
+      "split": "calibration",
+      "score": 60.0,
+      "gold_region_count": 1,
+      "detected_region_count": 1,
+      "region_iou": [
+        1.0
+      ],
+      "transcript_coverage": 0.864
+    },
+    {
+      "case": "power-extra-pause",
+      "split": "calibration",
+      "score": 38.5,
+      "gold_region_count": 1,
+      "detected_region_count": 2,
+      "region_iou": [
+        0.629
+      ],
+      "transcript_coverage": 1.0
+    },
+    {
+      "case": "power-rushed",
+      "split": "calibration",
+      "score": 60.0,
+      "gold_region_count": 1,
+      "detected_region_count": 1,
+      "region_iou": [
+        0.974
+      ],
+      "transcript_coverage": 0.909
+    },
+    {
+      "case": "beliefs-unchanged",
+      "split": "held-out excerpt",
+      "score": 100.0,
+      "gold_region_count": 0,
+      "detected_region_count": 0,
+      "region_iou": [],
+      "transcript_coverage": 1.0
+    },
+    {
+      "case": "beliefs-global-gain-control",
+      "split": "held-out excerpt",
+      "score": 100.0,
+      "gold_region_count": 0,
+      "detected_region_count": 0,
+      "region_iou": [],
+      "transcript_coverage": 1.0
+    },
+    {
+      "case": "beliefs-near-perfect",
+      "split": "held-out excerpt",
+      "score": 100.0,
+      "gold_region_count": 1,
+      "detected_region_count": 0,
+      "region_iou": [
+        0
+      ],
+      "transcript_coverage": 1.0
+    },
+    {
+      "case": "beliefs-moderate-volume",
+      "split": "held-out excerpt",
+      "score": 70.4,
+      "gold_region_count": 1,
+      "detected_region_count": 1,
+      "region_iou": [
+        1.0
+      ],
+      "transcript_coverage": 0.944
+    },
+    {
+      "case": "beliefs-severe-volume",
+      "split": "held-out excerpt",
+      "score": 60.0,
+      "gold_region_count": 1,
+      "detected_region_count": 1,
+      "region_iou": [
+        1.0
+      ],
+      "transcript_coverage": 0.944
+    },
+    {
+      "case": "beliefs-extra-pause",
+      "split": "held-out excerpt",
+      "score": 43.8,
+      "gold_region_count": 1,
+      "detected_region_count": 2,
+      "region_iou": [
+        1.0
+      ],
+      "transcript_coverage": 1.0
+    },
+    {
+      "case": "beliefs-rushed",
+      "split": "held-out excerpt",
+      "score": 60.0,
+      "gold_region_count": 1,
+      "detected_region_count": 1,
+      "region_iou": [
+        0.918
+      ],
+      "transcript_coverage": 1.0
+    }
+  ]
+}
