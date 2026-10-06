@@ -60,7 +60,7 @@ For each component, overlapping flagged intervals are merged. Component score = 
 - Both 1.8× tempo mirrors have pacing flags.
 - Both near-perfect 5 dB edits remain below threshold; this sensitivity limitation is deliberate and disclosed.
 
-Tests check controls, severity ordering, injected interval overlap, pause and pacing detection, repeat-analysis consistency, and rejection of invalid/silent/wrong-rate WAV input. Browser and production checks are recorded in the submission audit.
+Tests check controls, severity ordering, injected interval overlap, pause and pacing detection, repeat-analysis consistency, and rejection of invalid/silent/wrong-rate WAV input. Four HTTP regression tests additionally check chunked uploads, header casing, request-size limits, and invalid JSON/base64. Browser and production checks are recorded in the submission audit.
 
 ## Privacy and operational limits
 
