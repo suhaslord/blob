@@ -6,9 +6,13 @@ from core import analyze
 class handler(BaseHTTPRequestHandler):
  def do_POST(self):
   try:
-   length=int(self.headers.get('Content-Length','0'))
-   if length<1 or length>3_200_000:raise ValueError('Upload request must be below 3.2 MB.')
-   body=json.loads(self.rfile.read(length));transcript=body.get('transcript','')
+   headers={key.lower():value for key,value in self.headers.items()}
+   supplied=headers.get('content-length')
+   length=int(supplied) if supplied is not None else None
+   if length is not None and (length<1 or length>3_200_000):raise ValueError('Upload request must be below 3.2 MB.')
+   raw=self.rfile.read(length if length is not None else 3_200_001)
+   if not raw or len(raw)>3_200_000:raise ValueError('Upload request must be below 3.2 MB.')
+   body=json.loads(raw);transcript=body.get('transcript','')
    if not isinstance(transcript,str) or len(transcript)>1500:raise ValueError('Use a transcript up to 1500 characters.')
    baseline=base64.b64decode(body['baseline'],validate=True);participant=base64.b64decode(body['participant'],validate=True)
    result=analyze(baseline,participant,transcript);self.respond(200,result)
