@@ -71,3 +71,7 @@ Clips must be 1–32 seconds, PCM mono 16 kHz after browser conversion, with up 
 ## AI and third-party disclosure
 
 Codex assisted with scoping, implementation, debugging, data transformations, tests, documentation and submission preparation. The Vosk/Kaldi model is pretrained and was not trained by this team. Analytical thresholds were calibrated using the Power excerpt. Vosk API/model and NumPy retain their upstream licenses. Source code written for this project is MIT licensed. Public-domain audio attribution and modifications are disclosed above and in the dataset manifest.
+
+## EurekaDev entry
+
+Coding / Computer Science + AI. Judge walkthrough: https://speechtrace-lab.vercel.app/eureka.html. Originally built October 6 for Multimodal AI Track C and already submitted there. The October 7 release adds a tailored evaluation guide, with a proposed independent validation study clearly distinguished from completed work.

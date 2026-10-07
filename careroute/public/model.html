@@ -1,0 +1,23 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CareRoute - actual model</title><style>body{margin:0;background:#f5f8f7;color:#17332f;font:17px/1.7 system-ui}main{max-width:850px;margin:auto;padding:60px 24px}a{color:#08786c}h1{font-size:48px;line-height:1.1;letter-spacing:-2px}h2{margin-top:36px;line-height:1.3}section{padding:24px;background:white;border-radius:20px;border:1px solid #dce9e5;margin:24px 0}li{margin:8px 0}.eyebrow{color:#08786c;font-weight:700}nav{display:flex;gap:24px;flex-wrap:wrap}small{color:#536d67}@media(max-width:500px){h1{font-size:36px}}</style><main><a href="/">Back to CareRoute</a><h1>Actual model source</h1><p>Small administrative intent model. No clinical predictions.</p><pre style="overflow:auto;background:white;padding:24px;font-size:13px">// Multinomial naive Bayes trained on hand-written synthetic administrative intents.
+// Never used for diagnosis, red flags, or medical urgency.
+const samples = {
+  affordable: [&#x27;cannot afford care insurance bill cost expensive&#x27;, &#x27;uninsured low cost clinic financial assistance&#x27;, &#x27;cheap doctor without insurance money&#x27;, &#x27;sliding scale fees payment help&#x27;, &#x27;prescription costs budget medication assistance&#x27;, &#x27;transportation to free clinic&#x27;, &#x27;hospital bill too expensive&#x27;, &#x27;need affordable health center&#x27;],
+  prepare: [&#x27;prepare appointment questions doctor visit&#x27;, &#x27;write summary for my appointment&#x27;, &#x27;what should i bring to the visit&#x27;, &#x27;organize notes before seeing clinician&#x27;, &#x27;list medications and allergies for doctor&#x27;, &#x27;remember questions at consultation&#x27;, &#x27;visit preparation checklist&#x27;, &#x27;explain my concern to a nurse&#x27;],
+  now: [&#x27;need help with a health concern&#x27;, &#x27;where can i get care today&#x27;, &#x27;call my clinic for advice&#x27;, &#x27;find nearby primary care&#x27;, &#x27;not sure what to do next&#x27;, &#x27;need to talk with a nurse&#x27;, &#x27;looking for health information&#x27;, &#x27;general next steps for care&#x27;],
+};
+const stop = new Set(&#x27;a an the to for my i me with of and at in do what should can get need&#x27;.split(&#x27; &#x27;));
+const tokens = text =&gt; (text.toLowerCase().match(/[a-z]+/g) || []).filter(w =&gt; !stop.has(w));
+const vocabulary = new Set();
+const classes = Object.entries(samples).map(([mode, phrases]) =&gt; {
+  const counts = new Map(); let total = 0;
+  for (const phrase of phrases) for (const word of tokens(phrase)) {counts.set(word,(counts.get(word)||0)+1);vocabulary.add(word);total++;}
+  return {mode,counts,total};
+});
+export function suggestIntent(text) {
+  const words = tokens(text).filter(w =&gt; vocabulary.has(w));
+  if (words.length &lt; 2) return null;
+  const scores = classes.map(c =&gt; ({mode:c.mode,score:words.reduce((n,w)=&gt;n+Math.log(((c.counts.get(w)||0)+1)/(c.total+vocabulary.size)),0)})).sort((a,b)=&gt;b.score-a.score);
+  if (scores[0].score-scores[1].score &lt; 0.8) return null;
+  return scores[0].mode === &#x27;now&#x27; ? null : scores[0].mode;
+}
+</pre></main></html>
