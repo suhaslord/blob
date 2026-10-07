@@ -75,3 +75,6 @@ Codex assisted with scoping, implementation, debugging, data transformations, te
 ## EurekaDev entry
 
 Coding / Computer Science + AI. Judge walkthrough: https://speechtrace-lab.vercel.app/eureka.html. Originally built October 6 for Multimodal AI Track C and already submitted there. The October 7 release adds a tailored evaluation guide, with a proposed independent validation study clearly distinguished from completed work.
+
+## October 7 rehearsal release
+Performer-authored intentions, region interpretations and text export stay in the tab and clear with stale analysis. InnovArt guide: /innovart.html. Arbiter General guide: /arbiter.html. Existing origin and prior submissions are disclosed.

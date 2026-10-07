@@ -35,3 +35,6 @@ The prototype is free and account-free. A possible later model is an institution
 ## DSH healthcare entry - October 7
 
 Live judge guide: https://careroute-access.vercel.app/about.html. Visit preparation now supports up to five user-authored questions in order, removal, stale-card invalidation and reset. The earlier core demo predates this addition. Questions remain in React memory, never localStorage or an API. Source and checks are included here.
+
+## Question prioritization / STEMergent preparation
+October 7 adds Up/Down controls that reorder user-authored questions and invalidate the old card. Guide: /stemergent.html. Event dates conflict; this release is not claimed as work during a future window.
